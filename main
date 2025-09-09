@@ -51,10 +51,10 @@ function main(workbook: ExcelScript.Workbook) {
   });
 
   // データ本体を取得（合計行除く）
-  const body = srcTable.getRangeBetweenHeaderAndTotal().getValues();
+  const body: (string | number | boolean)[][] = srcTable.getRangeBetweenHeaderAndTotal().getValues();
 
   // 宛先テーブルの既存データをクリア（ヘッダーはそのまま）
-  const existingRows = dstTable.getRows();
+  const existingRows: ExcelScript.TableRow[] = dstTable.getRows();
   for (let i = existingRows.length - 1; i >= 0; i--) {
     existingRows[i].delete();
   }
@@ -65,7 +65,7 @@ function main(workbook: ExcelScript.Workbook) {
   const dstColCount = dstHeader.length;
   const newRows: (string | number | boolean)[][] = [];
 
-  body.forEach(srcRow => {
+  body.forEach((srcRow) => {
     // 空行判定（ターゲット列がすべて空ならスキップ）
     const allTargetsEmpty = TARGET_HEADERS.every(h => {
       const v = srcRow[srcIndexByHeader[h]];
@@ -74,7 +74,10 @@ function main(workbook: ExcelScript.Workbook) {
     });
     if (allTargetsEmpty) return;
 
-    const dstRow = Array(dstColCount).fill("");
+    // ★ 77行目対策：ユニオン型の配列を手動初期化
+    const dstRow: (string | number | boolean)[] = new Array(dstColCount);
+    for (let j = 0; j < dstColCount; j++) dstRow[j] = "";
+
     TARGET_HEADERS.forEach(h => {
       const value = srcRow[srcIndexByHeader[h]];
       dstRow[dstIndexByHeader[h]] = value ?? "";
