@@ -54,9 +54,9 @@ function main(workbook: ExcelScript.Workbook) {
   const body: (string | number | boolean)[][] = srcTable.getRangeBetweenHeaderAndTotal().getValues();
 
   // 宛先テーブルの既存データをクリア（ヘッダーはそのまま）
-  const existingRows: ExcelScript.TableRow[] = dstTable.getRows();
-  for (let i = existingRows.length - 1; i >= 0; i--) {
-    existingRows[i].delete();
+  // ★ 変数に型を付けず、行数を見ながら後ろから削除して型推論エラーを回避
+  for (let i = dstTable.getRowCount() - 1; i >= 0; i--) {
+    dstTable.getRows()[i].delete();
   }
 
   // 追加する行データを作成
@@ -74,7 +74,7 @@ function main(workbook: ExcelScript.Workbook) {
     });
     if (allTargetsEmpty) return;
 
-    // ★ 77行目対策：ユニオン型の配列を手動初期化
+    // ユニオン型配列を手動初期化（Array(...).fill("") は避ける）
     const dstRow: (string | number | boolean)[] = new Array(dstColCount);
     for (let j = 0; j < dstColCount; j++) dstRow[j] = "";
 
