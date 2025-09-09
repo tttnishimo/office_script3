@@ -1,0 +1,88 @@
+function main(workbook: ExcelScript.Workbook) {
+  // ===== 設定値 =====
+  const SOURCE_SHEET_NAME = "Table.Combine";
+  const SOURCE_TABLE_NAME = "追加1";
+
+  // ここにコピーしたいヘッダー名を列挙（最大5列まで想定）
+  // 宛先テーブルにも同名ヘッダーが存在している必要があります。
+  const TARGET_HEADERS: string[] = ["氏名", "メールアドレス"];
+  // ==================
+
+  // 元テーブルの取得
+  const srcSheet = workbook.getWorksheet(SOURCE_SHEET_NAME);
+  if (!srcSheet) throw new Error(`シート「${SOURCE_SHEET_NAME}」が見つかりません。`);
+
+  const srcTable = workbook.getTables().find(t => t.getName() === SOURCE_TABLE_NAME);
+  if (!srcTable) throw new Error(`テーブル「${SOURCE_TABLE_NAME}」が見つかりません。`);
+
+  // 宛先：最後のシートの最初のテーブル（列調整やヘッダー変更は行いません）
+  const sheets = workbook.getWorksheets();
+  if (sheets.length === 0) throw new Error("ワークシートが見つかりません。");
+  const dstSheet = sheets[sheets.length - 1];
+
+  const dstTables = dstSheet.getTables();
+  if (dstTables.length === 0) {
+    throw new Error("最後のシートにテーブルがありません。宛先テーブルを作成してから実行してください。");
+  }
+  const dstTable = dstTables[0];
+
+  // 元/宛先のヘッダー行
+  const srcHeader = srcTable.getHeaderRowRange().getValues()[0];
+  const dstHeader = dstTable.getHeaderRowRange().getValues()[0];
+
+  // 元テーブルにおける各ターゲット列のインデックスを取得
+  const srcIndexByHeader: Record<string, number> = {};
+  TARGET_HEADERS.forEach(h => {
+    const idx = srcHeader.indexOf(h);
+    if (idx === -1) {
+      throw new Error(`元テーブルにヘッダー「${h}」が見つかりません。`);
+    }
+    srcIndexByHeader[h] = idx;
+  });
+
+  // 宛先テーブルにおける各ターゲット列のインデックスを取得
+  const dstIndexByHeader: Record<string, number> = {};
+  TARGET_HEADERS.forEach(h => {
+    const idx = dstHeader.indexOf(h);
+    if (idx === -1) {
+      throw new Error(`宛先テーブルにヘッダー「${h}」が見つかりません。宛先に同名ヘッダーを作成してください。`);
+    }
+    dstIndexByHeader[h] = idx;
+  });
+
+  // データ本体を取得（合計行除く）
+  const body = srcTable.getRangeBetweenHeaderAndTotal().getValues();
+
+  // 宛先テーブルの既存データをクリア（ヘッダーはそのまま）
+  const existingRows = dstTable.getRows();
+  for (let i = existingRows.length - 1; i >= 0; i--) {
+    existingRows[i].delete();
+  }
+
+  // 追加する行データを作成
+  // addRows は宛先テーブルの列数と同じ長さの配列を要求するため、
+  // 宛先ヘッダー数の長さで配列を作り、ターゲット列だけ値を埋めます（他列は空文字）。
+  const dstColCount = dstHeader.length;
+  const newRows: (string | number | boolean)[][] = [];
+
+  body.forEach(srcRow => {
+    // 空行判定（ターゲット列がすべて空ならスキップ）
+    const allTargetsEmpty = TARGET_HEADERS.every(h => {
+      const v = srcRow[srcIndexByHeader[h]];
+      const s = (v ?? "").toString().trim();
+      return s.length === 0;
+    });
+    if (allTargetsEmpty) return;
+
+    const dstRow = Array(dstColCount).fill("");
+    TARGET_HEADERS.forEach(h => {
+      const value = srcRow[srcIndexByHeader[h]];
+      dstRow[dstIndexByHeader[h]] = value ?? "";
+    });
+    newRows.push(dstRow);
+  });
+
+  if (newRows.length > 0) {
+    dstTable.addRows(-1, newRows);
+  }
+}
